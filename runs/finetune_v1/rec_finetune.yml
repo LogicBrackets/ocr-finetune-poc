@@ -1,0 +1,110 @@
+Global:
+  use_gpu: false
+  epoch_num: 30
+  log_smooth_window: 20
+  print_batch_step: 20
+  save_model_dir: runs/finetune_v1/models
+  save_epoch_step: 1
+  eval_batch_step: [0, 200]
+  cal_metric_during_train: True
+  pretrained_model: 
+  checkpoints:
+  use_visualdl: False
+  infer_img:
+  character_dict_path: runs/finetune_v1/data/char_dict.txt
+  character_type: en_sensitive
+  max_text_length: 40
+  infer_mode: False
+  use_space_char: true
+  save_res_path: runs/finetune_v1/results
+
+Optimizer:
+  name: Adam
+  beta1: 0.9
+  beta2: 0.999
+  lr:
+    name: Cosine
+    learning_rate: 0.0001
+    warmup_epoch: 3
+  regularizer:
+    name: L2
+    factor: 1e-05
+  grad_clip:
+    name: ClipGradByGlobalNorm
+    clip_norm: 5.0
+
+Architecture:
+  model_type: rec
+  algorithm: SVTR_LCNet
+  Transform:
+  Backbone:
+    name: MobileNetV1Enhance
+    scale: 0.5
+    last_conv_stride: [1, 2]
+    last_pool_type: avg
+  Neck:
+    name: SequenceEncoder
+    encoder_type: svtr
+    dims: 64
+    depth: 2
+    hidden_dims: 120
+    use_guide: True
+  Head:
+    name: CTCHead
+    fc_decay: 1e-05
+
+Loss:
+  name: CTCLoss
+
+PostProcess:
+  name: CTCLabelDecode
+
+Metric:
+  name: RecMetric
+  main_indicator: acc
+
+Train:
+  dataset:
+    name: SimpleDataSet
+    data_dir: runs/finetune_v1/data/train_images
+    label_file_list:
+      - runs/finetune_v1/data/train_list.txt
+    transforms:
+      - DecodeImage:
+          img_mode: BGR
+          channel_first: False
+      - RecAug:
+      - RecConAug:
+          prob: 0.5
+          image_shape: [3, 32, 320]
+      - CTCLabelEncode:
+      - RecResizeImg:
+          image_shape: [3, 32, 320]
+      - KeepKeys:
+          keep_keys: ['image', 'label', 'length']
+  loader:
+    shuffle: True
+    batch_size_per_card: 8
+    drop_last: True
+    num_workers: 0
+
+Eval:
+  dataset:
+    name: SimpleDataSet
+    data_dir: runs/finetune_v1/data/val_images
+    label_file_list:
+      - runs/finetune_v1/data/val_list.txt
+    transforms:
+      - DecodeImage:
+          img_mode: BGR
+          channel_first: False
+      - CTCLabelEncode:
+      - RecResizeImg:
+          image_shape: [3, 32, 320]
+      - KeepKeys:
+          keep_keys: ['image', 'label', 'length']
+  loader:
+    shuffle: False
+    drop_last: False
+    batch_size_per_card: 8
+    num_workers: 0

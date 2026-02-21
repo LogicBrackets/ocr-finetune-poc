@@ -1,0 +1,30 @@
+# ── PaddlePaddle framework ────────────────────────────────────────────────────
+# Choose ONE of the two lines below depending on your hardware:
+#
+#   CPU-only  →  uncomment the first line
+#   NVIDIA GPU →  uncomment the second line (requires CUDA 11.7 or 11.8)
+#
+# paddlepaddle==2.6.1
+# paddlepaddle-gpu==2.6.1
+
+# ── PaddleOCR ─────────────────────────────────────────────────────────────────
+paddleocr>=2.7.0
+
+# ── Image processing ──────────────────────────────────────────────────────────
+opencv-python>=4.6.0
+Pillow>=9.5.0
+
+# ── Numerical / data ──────────────────────────────────────────────────────────
+numpy>=1.26.0
+pandas>=1.5.0
+
+# ── Excel I/O (required by pandas.read_excel for .xlsx files) ─────────────────
+openpyxl>=3.0.9
+
+# ── Evaluation ────────────────────────────────────────────────────────────────
+# Used by PaddleOCRVLFinetuner.evaluate() to compute normalised edit-distance.
+rapidfuzz>=3.0.0
+
+# ── OCR error reporting ───────────────────────────────────────────────────────
+# Used by TrainingDataPipeline.report_ocr_errors() to parse Markdown tables.
+beautifulsoup4>=4.12.0

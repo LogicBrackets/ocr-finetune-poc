@@ -1,0 +1,8 @@
+{
+  "total": 37500,
+  "unique_chars": 74,
+  "avg_label_length": 10.22,
+  "max_label_length": 45,
+  "min_label_length": 0,
+  "avg_confidence": 1.0
+}
