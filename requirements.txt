@@ -1,21 +1,37 @@
-# ── PaddlePaddle framework ────────────────────────────────────────────────────
-# Choose ONE of the two lines below depending on your hardware:
+# ══════════════════════════════════════════════════════════════════════════════
+# PaddleOCR Fine-tuning — Python dependencies
+# ══════════════════════════════════════════════════════════════════════════════
 #
-#   CPU-only  →  uncomment the first line
-#   NVIDIA GPU →  uncomment the second line (requires CUDA 11.7 or 11.8)
+# STEP 1 — Install PaddlePaddle BEFORE running pip install -r requirements.txt
 #
-# paddlepaddle==2.6.1
-# paddlepaddle-gpu==2.6.1
+#   CPU only (Linux / macOS / Windows):
+#       pip install paddlepaddle==2.6.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
+#
+#   NVIDIA GPU (CUDA 11.7):
+#       pip install paddlepaddle-gpu==2.6.1.post117 \
+#           -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+#
+#   NVIDIA GPU (CUDA 11.8):
+#       pip install paddlepaddle-gpu==2.6.1.post118 \
+#           -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+#
+#   Or use setup.sh which handles this automatically:
+#       bash setup.sh [cpu|cu117|cu118]
+#
+# STEP 2 — Then install these requirements:
+#       pip install -r requirements.txt
+# ══════════════════════════════════════════════════════════════════════════════
 
 # ── PaddleOCR ─────────────────────────────────────────────────────────────────
-paddleocr>=2.7.0
+# 2.7.x ships the ppocr module (required by tools/train.py) and the inference API.
+paddleocr>=2.7.0,<3.0.0
 
 # ── Image processing ──────────────────────────────────────────────────────────
 opencv-python>=4.6.0
 Pillow>=9.5.0
 
 # ── Numerical / data ──────────────────────────────────────────────────────────
-numpy>=1.26.0
+numpy>=1.24.0
 pandas>=1.5.0
 
 # ── Excel I/O (required by pandas.read_excel for .xlsx files) ─────────────────
@@ -28,3 +44,6 @@ rapidfuzz>=3.0.0
 # ── OCR error reporting ───────────────────────────────────────────────────────
 # Used by TrainingDataPipeline.report_ocr_errors() to parse Markdown tables.
 beautifulsoup4>=4.12.0
+
+# ── YAML (needed by tools/train.py) ───────────────────────────────────────────
+PyYAML>=6.0

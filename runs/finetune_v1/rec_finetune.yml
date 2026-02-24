@@ -1,22 +1,24 @@
 Global:
   use_gpu: false
-  epoch_num: 30
+  epoch_num: 50
   log_smooth_window: 20
   print_batch_step: 20
-  save_model_dir: runs/finetune_v1/models
+  save_model_dir: /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/models
   save_epoch_step: 1
   eval_batch_step: [0, 200]
   cal_metric_during_train: True
-  pretrained_model: 
+  pretrained_model:
   checkpoints:
   use_visualdl: False
   infer_img:
-  character_dict_path: runs/finetune_v1/data/char_dict.txt
+  character_dict_path: /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/data/char_dict.txt
   character_type: en_sensitive
-  max_text_length: 40
+  max_text_length: 50
   infer_mode: False
   use_space_char: true
-  save_res_path: runs/finetune_v1/results
+  save_res_path: /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/results
+  seed: 42
+  distributed: False
 
 Optimizer:
   name: Adam
@@ -24,11 +26,11 @@ Optimizer:
   beta2: 0.999
   lr:
     name: Cosine
-    learning_rate: 0.0001
-    warmup_epoch: 3
+    learning_rate: 5.0e-5
+    warmup_epoch: 5
   regularizer:
     name: L2
-    factor: 1e-05
+    factor: 1.0e-5
   grad_clip:
     name: ClipGradByGlobalNorm
     clip_norm: 5.0
@@ -51,7 +53,7 @@ Architecture:
     use_guide: True
   Head:
     name: CTCHead
-    fc_decay: 1e-05
+    fc_decay: 1.0e-5
 
 Loss:
   name: CTCLoss
@@ -66,9 +68,9 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: runs/finetune_v1/data/train_images
+    data_dir: /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/data/train_images
     label_file_list:
-      - runs/finetune_v1/data/train_list.txt
+      - /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/data/train_list.txt
     transforms:
       - DecodeImage:
           img_mode: BGR
@@ -91,9 +93,9 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: runs/finetune_v1/data/val_images
+    data_dir: /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/data/val_images
     label_file_list:
-      - runs/finetune_v1/data/val_list.txt
+      - /home/hanumanthbudihal/ocr-finetune-poc/runs/finetune_v1/data/val_list.txt
     transforms:
       - DecodeImage:
           img_mode: BGR

@@ -10,7 +10,10 @@
       "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/pip.exe\" install paddlepaddle==3.3.0 -f https://www.paddlepaddle.org.cn/whl/windows/mkl/avx/stable.html)",
       "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/pip.exe\" install:*)",
       "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/python.exe\" -c:*)",
-      "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/python.exe\" -c \":*)"
+      "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/python.exe\" -c \":*)",
+      "Bash(du:*)",
+      "Bash(python3:*)",
+      "Bash(chmod:*)"
     ]
   }
 }
