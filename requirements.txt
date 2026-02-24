@@ -5,7 +5,7 @@
 # STEP 1 — Install PaddlePaddle BEFORE running pip install -r requirements.txt
 #
 #   CPU only (Linux / macOS / Windows):
-#       pip install paddlepaddle==2.6.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
+#       pip install paddlepaddle==2.6.2
 #
 #   NVIDIA GPU (CUDA 11.7):
 #       pip install paddlepaddle-gpu==2.6.1.post117 \
@@ -14,6 +14,9 @@
 #   NVIDIA GPU (CUDA 11.8):
 #       pip install paddlepaddle-gpu==2.6.1.post118 \
 #           -f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
+#
+#   If you installed the GPU variant on a CPU-only machine, switch with:
+#       pip uninstall paddlepaddle-gpu -y && pip install paddlepaddle==2.6.2
 #
 #   Or use setup.sh which handles this automatically:
 #       bash setup.sh [cpu|cu117|cu118]
@@ -27,11 +30,15 @@
 paddleocr>=2.7.0,<3.0.0
 
 # ── Image processing ──────────────────────────────────────────────────────────
-opencv-python>=4.6.0
+# opencv-python-headless must stay on 4.x — the 4.13+ wheel requires numpy>=2,
+# which breaks PaddleOCR 2.7.x (compiled against numpy 1.x ABI).
+opencv-python>=4.6.0,<4.10.0
+opencv-python-headless>=4.6.0,<4.10.0
 Pillow>=9.5.0
 
 # ── Numerical / data ──────────────────────────────────────────────────────────
-numpy>=1.24.0
+# PaddleOCR 2.7.x is compiled against numpy 1.x ABI — must stay below 2.0.
+numpy>=1.24.0,<2.0.0
 pandas>=1.5.0
 
 # ── Excel I/O (required by pandas.read_excel for .xlsx files) ─────────────────
@@ -47,3 +54,4 @@ beautifulsoup4>=4.12.0
 
 # ── YAML (needed by tools/train.py) ───────────────────────────────────────────
 PyYAML>=6.0
+pandas

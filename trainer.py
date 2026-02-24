@@ -346,39 +346,58 @@ Eval:
         """
         Locate PaddleOCR's ``tools/train.py`` and execute it as a subprocess.
 
-        Raises ``RuntimeError`` when the training script cannot be found
-        (PaddleOCR 3.x pip package is inference-only; install the plugin with
-        ``paddlex --install PaddleOCR`` to get the training scripts).
+        The subprocess needs two things on its sys.path:
+          1. The project root — for ``import tools.program``.
+          2. The ppocr source root — for ``from ppocr.modeling import …`` etc.
+
+        The ``paddleocr`` pip package (2.7.x) ships only a partial ``ppocr``
+        module (data / postprocess / utils).  The full training modules
+        (modeling, losses, optimizer, metrics) live at the project root after
+        running::
+
+            python scripts/install_ppocr_source.py
         """
         train_script = self._find_train_script()
 
         if train_script is None:
             raise RuntimeError(
                 "PaddleOCR tools/train.py not found.\n"
-                "PaddleOCR 3.x no longer ships training scripts in the pip package.\n"
-                "Fix: run  paddlex --install PaddleOCR  then retry."
+                "Fix: the local tools/train.py should be present in this repo.\n"
+                "If it is missing, re-clone the repository."
+            )
+
+        # ── Verify the full ppocr training source is available ────────────────
+        project_root = Path(__file__).parent.resolve()
+        ppocr_ok = self._check_ppocr_training_modules(project_root)
+        if not ppocr_ok:
+            raise RuntimeError(
+                "Training environment is not ready — see ERROR log above.\n\n"
+                "Most common cause: running the system Python instead of the venv.\n"
+                "    source .venv/bin/activate && python train.py ...\n\n"
+                "If PaddlePaddle is missing entirely:\n"
+                "    bash setup.sh cpu   # (or cu117 / cu118 for GPU)\n\n"
+                "If the ppocr source modules are missing:\n"
+                "    python scripts/install_ppocr_source.py"
             )
 
         cmd = [sys.executable, str(train_script), "-c", str(config_path)]
 
-        # Ensure ppocr.* and tools.* are importable in the subprocess.
-        # The project root (where this file lives) must be on sys.path so that
-        # both "import tools.program" and "from ppocr.data import ..." resolve.
-        # tools/train.py does its own sys.path.insert but PYTHONPATH is more
-        # reliable when spawning a subprocess (especially on Windows).
-        project_root = str(Path(__file__).parent.resolve())
+        # PYTHONPATH must include the project root so that:
+        #   • "import tools.program"          → project_root/tools/program.py
+        #   • "from ppocr.modeling import …"  → project_root/ppocr/modeling/
         env = os.environ.copy()
         existing = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (
-            project_root + os.pathsep + existing if existing else project_root
+            str(project_root) + os.pathsep + existing
+            if existing else str(project_root)
         )
 
         logger.info("Training command: %s", " ".join(cmd))
         logger.info("use_gpu: %s", self.config.use_gpu)
 
-        # Run from project root so that "import tools.program" and relative
-        # paths in the YAML (if any remain) resolve correctly.
-        result = subprocess.run(cmd, cwd=project_root, env=env)
+        # Run from project root so relative paths in the YAML are resolved
+        # relative to the project, not some arbitrary CWD.
+        result = subprocess.run(cmd, cwd=str(project_root), env=env)
         if result.returncode != 0:
             raise RuntimeError(
                 f"PaddleOCR training failed (return code {result.returncode})."
@@ -445,6 +464,60 @@ Eval:
             "Install the training plugin with:  paddlex --install PaddleOCR"
         )
         return None
+
+    def _check_ppocr_training_modules(self, project_root: Path) -> bool:
+        """Return True if the full ppocr training source is importable.
+
+        The paddleocr pip package ships only inference modules (data,
+        postprocess, utils).  Training additionally requires modeling, losses,
+        optimizer, and metrics.
+
+        Run ``python scripts/install_ppocr_source.py`` to download the full
+        source from PaddleOCR release/2.7 into ``<project_root>/ppocr/``.
+        """
+        # Ensure project root is on sys.path so ppocr/ at project root is found.
+        project_root_str = str(project_root)
+        if project_root_str not in sys.path:
+            sys.path.insert(0, project_root_str)
+
+        # Check paddle framework first — all training modules need it.
+        try:
+            __import__("paddle")
+        except ImportError:
+            logger.error(
+                "PaddlePaddle is not installed in the current Python environment.\n"
+                "You are likely running the system Python instead of the project venv.\n\n"
+                "Fix (activate the venv and retry):\n"
+                "    source .venv/bin/activate\n"
+                "    python train.py ...\n\n"
+                "Or set up the environment from scratch:\n"
+                "    bash setup.sh cpu   # (or cu117 / cu118 for GPU)"
+            )
+            return False
+
+        required = [
+            "ppocr.modeling",
+            "ppocr.losses",
+            "ppocr.optimizer",
+            "ppocr.metrics",
+        ]
+        missing = []
+        for mod in required:
+            try:
+                __import__(mod)
+            except ImportError:
+                missing.append(mod)
+
+        if missing:
+            logger.error(
+                "Missing ppocr training modules: %s\n"
+                "The paddleocr pip package ships only an inference-only subset "
+                "of ppocr.\n"
+                "Fix: python scripts/install_ppocr_source.py",
+                missing,
+            )
+            return False
+        return True
 
     def _resolve_best_model(self) -> Path:
         """Return the base path of the best or most recent saved checkpoint.

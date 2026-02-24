@@ -24,8 +24,8 @@ RUN_DIR     ?= runs/finetune_v1
 DATA_DIR    ?= finetune_data
 PRETRAINED  ?= pretrained/en_PP-OCRv4_rec_train/best_accuracy
 
-.PHONY: all install install-gpu download-pretrained build-dataset train \
-        train-only export eval clean-runs clean-data lint help
+.PHONY: all install install-gpu install-ppocr download-pretrained build-dataset \
+        train train-only train-resume export eval clean-runs clean-data lint help
 
 # ── Default target ────────────────────────────────────────────────────────────
 all: help
@@ -33,9 +33,8 @@ all: help
 # ── Installation ──────────────────────────────────────────────────────────────
 
 install:
-	@echo "Installing CPU PaddlePaddle 2.6.1 …"
-	$(PYTHON) -m pip install paddlepaddle==2.6.1 \
-		-i https://pypi.tuna.tsinghua.edu.cn/simple
+	@echo "Installing CPU PaddlePaddle 2.6.2 …"
+	$(PYTHON) -m pip install paddlepaddle==2.6.2
 	@echo "Installing project requirements …"
 	$(PYTHON) -m pip install -r requirements.txt
 
@@ -45,6 +44,12 @@ install-gpu:
 		-f https://www.paddlepaddle.org.cn/whl/linux/mkl/avx/stable.html
 	@echo "Installing project requirements …"
 	$(PYTHON) -m pip install -r requirements.txt
+
+# ── ppocr training source ─────────────────────────────────────────────────────
+
+install-ppocr:
+	@echo "Downloading ppocr training source from PaddleOCR release/2.7 …"
+	$(PYTHON) scripts/install_ppocr_source.py
 
 # ── Pretrained model ──────────────────────────────────────────────────────────
 
@@ -141,6 +146,7 @@ help:
 	@echo ""
 	@echo "  make install              Install CPU PaddlePaddle + requirements"
 	@echo "  make install-gpu          Install GPU PaddlePaddle (CUDA 11.8) + requirements"
+	@echo "  make install-ppocr        Download ppocr training source (modeling, losses, etc.)"
 	@echo "  make download-pretrained  Download PP-OCRv4 English pretrained weights"
 	@echo "  make build-dataset        Run data pipeline only (no training)"
 	@echo "  make train                Full pipeline: dataset → train → export"
@@ -154,6 +160,7 @@ help:
 	@echo ""
 	@echo "Quick start:"
 	@echo "  make install"
+	@echo "  make install-ppocr"
 	@echo "  make download-pretrained"
 	@echo "  make train"
 	@echo ""

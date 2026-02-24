@@ -13,7 +13,8 @@
 #   1. Creates a Python virtual environment (.venv)
 #   2. Installs PaddlePaddle (CPU or GPU variant)
 #   3. Installs project requirements
-#   4. Optionally downloads PP-OCRv4 pretrained weights
+#   4. Downloads the full ppocr training source (modeling, losses, etc.)
+#   5. Optionally downloads PP-OCRv4 pretrained weights
 # ══════════════════════════════════════════════════════════════════════════════
 
 set -euo pipefail
@@ -69,9 +70,9 @@ PYTHON="$VENV_DIR/bin/python"
 # ── PaddlePaddle installation ─────────────────────────────────────────────────
 case "$MODE" in
     cpu)
-        info "Installing PaddlePaddle 2.6.1 (CPU) …"
-        "$PIP" install paddlepaddle==2.6.1 \
-            -i https://pypi.tuna.tsinghua.edu.cn/simple
+        info "Installing PaddlePaddle 2.6.2 (CPU) …"
+        # 2.6.1 is not on PyPI; 2.6.2 is the latest stable 2.x CPU wheel.
+        "$PIP" install paddlepaddle==2.6.2
         ;;
     cu117)
         info "Installing PaddlePaddle 2.6.1 (GPU, CUDA 11.7) …"
@@ -99,6 +100,18 @@ info "Installing project requirements …"
 # Verify PaddleOCR
 "$PYTHON" -c "import paddleocr; print(f'PaddleOCR {paddleocr.__version__} installed OK')" \
     || error "PaddleOCR import failed.  Check the installation output above."
+
+# ── ppocr training source ─────────────────────────────────────────────────────
+# The paddleocr pip package ships only inference modules (data, postprocess,
+# utils).  The full training source (modeling, losses, optimizer, metrics) must
+# be downloaded separately from PaddleOCR GitHub release/2.7.
+if [ -d "$SCRIPT_DIR/ppocr/modeling" ]; then
+    info "ppocr training source already present — skipping download."
+else
+    info "Downloading ppocr training source (sparse-clone, ~4 MB) …"
+    "$PYTHON" "$SCRIPT_DIR/scripts/install_ppocr_source.py" \
+        || error "Failed to download ppocr training source.  Check network access."
+fi
 
 # ── Optional: download pretrained model ───────────────────────────────────────
 echo ""

@@ -13,7 +13,12 @@
       "Bash(\"D:/20.AI and ML/ocr-finetune-poc/venv/Scripts/python.exe\" -c \":*)",
       "Bash(du:*)",
       "Bash(python3:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(nvcc:*)",
+      "Bash(echo \"nvcc not found\" ls /usr/local/cuda*)",
+      "Bash(source:*)",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

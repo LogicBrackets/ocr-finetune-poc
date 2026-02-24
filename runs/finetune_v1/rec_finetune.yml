@@ -7,7 +7,7 @@ Global:
   save_epoch_step: 1
   eval_batch_step: [0, 200]
   cal_metric_during_train: True
-  pretrained_model:
+  pretrained_model: /home/hanumanthbudihal/ocr-finetune-poc/pretrained/en_PP-OCRv4_rec_train/best_accuracy
   checkpoints:
   use_visualdl: False
   infer_img:
@@ -26,11 +26,11 @@ Optimizer:
   beta2: 0.999
   lr:
     name: Cosine
-    learning_rate: 5.0e-5
+    learning_rate: 5e-05
     warmup_epoch: 5
   regularizer:
     name: L2
-    factor: 1.0e-5
+    factor: 1e-05
   grad_clip:
     name: ClipGradByGlobalNorm
     clip_norm: 5.0
@@ -53,7 +53,7 @@ Architecture:
     use_guide: True
   Head:
     name: CTCHead
-    fc_decay: 1.0e-5
+    fc_decay: 1e-05
 
 Loss:
   name: CTCLoss

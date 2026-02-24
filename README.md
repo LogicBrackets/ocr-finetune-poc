@@ -26,7 +26,8 @@ ocr-finetune-poc/
 ├── Makefile                  # Common task shortcuts (install, train, export, eval)
 │
 ├── scripts/
-│   └── download_pretrained.py  # Download PP-OCRv4 pretrained checkpoints
+│   ├── download_pretrained.py    # Download PP-OCRv4 pretrained checkpoints
+│   └── install_ppocr_source.py   # Sparse-clone ppocr training source from GitHub
 │
 ├── pretrained/               # Pretrained model weights (populated by download script)
 │   └── en_PP-OCRv4_rec_train/
@@ -99,7 +100,8 @@ bash setup.sh cu118
 ```
 
 The script creates a `.venv`, installs PaddlePaddle and all dependencies,
-then optionally downloads the PP-OCRv4 pretrained weights.
+downloads the full `ppocr` training source (~4 MB sparse-clone), then
+optionally downloads the PP-OCRv4 pretrained weights.
 
 After setup, activate the environment and train:
 
@@ -136,7 +138,8 @@ python -m venv .venv
 
 **CPU only**
 ```bash
-pip install paddlepaddle==2.6.1 -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 2.6.2 is the latest stable 2.x CPU wheel on PyPI
+pip install paddlepaddle==2.6.2
 ```
 
 **GPU — CUDA 11.7**
@@ -172,7 +175,33 @@ Verify:
 python -c "from paddleocr import PaddleOCR; import cv2, pandas; print('All OK')"
 ```
 
-#### Step 4 — Download PP-OCRv4 pretrained weights
+#### Step 4 — Download the ppocr training source
+
+The `paddleocr` pip package (2.7.x) ships only the **inference** subset of
+`ppocr` (data, postprocess, utils). Training additionally requires:
+
+| Module | Purpose |
+|---|---|
+| `ppocr.modeling` | Model architecture (backbone, neck, head) |
+| `ppocr.losses` | CTC loss |
+| `ppocr.optimizer` | Learning-rate schedulers |
+| `ppocr.metrics` | Recognition accuracy metrics |
+
+Download the full source with a shallow sparse-clone (~4 MB):
+
+```bash
+python scripts/install_ppocr_source.py
+```
+
+Or via make:
+```bash
+make install-ppocr
+```
+
+The script places `ppocr/` at the project root and verifies all required
+submodules are importable. The `ppocr/` directory is git-ignored.
+
+#### Step 5 — Download PP-OCRv4 pretrained weights
 
 Fine-tuning from a pretrained checkpoint achieves much higher accuracy than
 training from scratch and converges significantly faster.
@@ -190,7 +219,7 @@ python scripts/download_pretrained.py --list
 
 Weights are saved to `pretrained/en_PP-OCRv4_rec_train/best_accuracy.pdparams`.
 
-#### Step 5 — Run fine-tuning
+#### Step 6 — Run fine-tuning
 
 ```bash
 python train.py \
@@ -460,14 +489,31 @@ non-fixed-format documents.
 
 ## Troubleshooting
 
-### `ModuleNotFoundError: No module named 'ppocr'`
-`tools/train.py` requires the `ppocr` module that ships with
-`paddleocr>=2.7.0,<3.0.0`. Make sure you installed `paddleocr` from
-`requirements.txt` (not the 3.x inference-only package).
+### `ModuleNotFoundError: No module named 'ppocr'` (or `ppocr.modeling`)
+
+The `paddleocr` 2.7.x pip package ships only an **inference-only** subset of
+`ppocr` (`data`, `postprocess`, `utils`). `tools/train.py` also needs
+`ppocr.modeling`, `ppocr.losses`, `ppocr.optimizer`, and `ppocr.metrics`,
+which are not in the pip package.
+
+**Fix — download the full training source:**
 
 ```bash
-pip show paddleocr | grep Version   # should be 2.7.x
+python scripts/install_ppocr_source.py
+# or
+make install-ppocr
 ```
+
+This performs a shallow sparse-clone of only the `ppocr/` directory
+(~4 MB) from the PaddleOCR `release/2.7` branch and places it at the
+project root. After the script completes, verify:
+
+```bash
+python -c "import ppocr.modeling, ppocr.losses, ppocr.optimizer, ppocr.metrics; print('OK')"
+```
+
+If the error persists, check that `git` is installed and network access to
+`github.com` is available.
 
 ### `PaddleOCR tools/train.py not found`
 This means none of the search locations contain the training script.
@@ -480,13 +526,27 @@ Check the training subprocess output above the error. Common causes:
   to regenerate `runs/finetune_v1/data/`
 - Not enough disk space for checkpoints
 
-### GPU not detected
-```bash
-python -c "import paddle; print(paddle.device.cuda.device_count())"
+### GPU not detected / `CUDA device is not set properly`
 ```
-If `0`, either CUDA is not installed, the wrong PaddlePaddle variant
-was installed, or `--no-gpu` was set. Use `make install-gpu` to reinstall
-the GPU variant.
+You are using GPU version Paddle, but your CUDA device is not set properly.
+```
+This warning appears when `paddlepaddle-gpu` is installed on a machine that
+has no NVIDIA GPU or CUDA drivers. The GPU variant will silently fall back
+to CPU, but it adds unnecessary overhead. Switch to the CPU package:
+
+```bash
+pip uninstall paddlepaddle-gpu -y
+pip install paddlepaddle==2.6.2
+```
+
+To confirm the fix:
+```bash
+python -c "import paddle; print(paddle.device.get_device())"
+# Expected: cpu
+```
+
+`FinetuneConfig.use_gpu` auto-detects this and sets itself to `False`, so
+training will proceed on CPU without any manual changes.
 
 ### Windows path errors
 Use forward slashes or raw strings in `--images` and `--ground-truths`:
