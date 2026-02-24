@@ -75,14 +75,21 @@ def _parse_args() -> argparse.Namespace:
     # Training hyper-parameters
     p.add_argument("--output-dir", default="runs/finetune_v1",
                    help="Root directory for training artefacts.")
-    p.add_argument("--epochs", type=int, default=30)
+    p.add_argument("--epochs", type=int, default=50,
+                   help="Total training epochs.  50 is a good starting point for fine-tuning.")
     p.add_argument("--batch-size", type=int, default=8)
-    p.add_argument("--lr", type=float, default=1e-4, dest="learning_rate")
-    p.add_argument("--warmup-epochs", type=int, default=3)
+    p.add_argument("--lr", type=float, default=5e-5, dest="learning_rate",
+                   help="Peak learning rate.  5e-5 is conservative for fine-tuning from "
+                        "a PaddleOCR pretrained checkpoint; use 1e-4 for scratch training.")
+    p.add_argument("--warmup-epochs", type=int, default=5,
+                   help="Linear LR warmup before Cosine decay.  Prevents optimizer "
+                        "shock on the first few epochs when fine-tuning.")
     p.add_argument("--weight-decay", type=float, default=1e-5)
     p.add_argument("--img-height", type=int, default=32)
     p.add_argument("--img-width", type=int, default=320)
-    p.add_argument("--max-text-length", type=int, default=40)
+    p.add_argument("--max-text-length", type=int, default=50,
+                   help="Maximum characters per crop.  Must be >= max observed label length "
+                        "in your dataset (pipeline stats show max=45; default 50 adds margin).")
     p.add_argument("--num-workers", type=int, default=0,
                    help="DataLoader workers (use 0 on Windows to avoid spawn issues).")
     p.add_argument("--pretrained-model", default=None,

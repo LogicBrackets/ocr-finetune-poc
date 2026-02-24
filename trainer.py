@@ -127,8 +127,16 @@ class PaddleOCRVLFinetuner:
         train_label = data_root / "train_list.txt"
         val_label = data_root / "val_list.txt"
 
-        train_local.save_label_file(str(train_label))
-        val_local.save_label_file(str(val_label))
+        # Write paths RELATIVE to each data_dir so that PaddleOCR's SimpleDataSet
+        # (which joins data_dir + path-from-label-file) resolves them correctly.
+        # This avoids the double-nesting bug that occurs when data_dir is absolute
+        # and the label file also contains a long relative path.
+        train_local.save_label_file(
+            str(train_label), relative_to=str(train_img_dir)
+        )
+        val_local.save_label_file(
+            str(val_label), relative_to=str(val_img_dir_used)
+        )
 
         # Build character dictionary from combined samples.
         char_dict_path = data_root / "char_dict.txt"
@@ -167,17 +175,23 @@ class PaddleOCRVLFinetuner:
         The config targets the lightweight PP-OCRv4 recognition pipeline
         (MobileNetV1Enhance + SVTR neck + CTCHead), which is what
         PaddleOCRVL's recognition backbone is based on.
+
+        All paths in the YAML are written as absolute paths so the config
+        is independent of the working directory when tools/train.py runs.
         """
         cfg = self.config
 
-        pretrained = cfg.pretrained_model_dir or ""
-        char_dict = str(data_paths["char_dict"]).replace("\\", "/")
-        train_label = str(data_paths["train_label"]).replace("\\", "/")
-        val_label = str(data_paths["val_label"]).replace("\\", "/")
-        train_dir = str(data_paths["train_dir"]).replace("\\", "/")
-        val_dir = str(data_paths["val_dir"]).replace("\\", "/")
-        save_model_dir = str(self.output_dir / "models").replace("\\", "/")
-        save_res_path = str(self.output_dir / "results").replace("\\", "/")
+        # Resolve everything to absolute paths — the subprocess runs from the
+        # project root but absolute paths make the YAML self-contained.
+        pretrained = str(Path(cfg.pretrained_model_dir).resolve()).replace("\\", "/") \
+            if cfg.pretrained_model_dir else ""
+        char_dict = str(data_paths["char_dict"].resolve()).replace("\\", "/")
+        train_label = str(data_paths["train_label"].resolve()).replace("\\", "/")
+        val_label = str(data_paths["val_label"].resolve()).replace("\\", "/")
+        train_dir = str(data_paths["train_dir"].resolve()).replace("\\", "/")
+        val_dir = str(data_paths["val_dir"].resolve()).replace("\\", "/")
+        save_model_dir = str((self.output_dir / "models").resolve()).replace("\\", "/")
+        save_res_path = str((self.output_dir / "results").resolve()).replace("\\", "/")
         eval_steps = str(cfg.eval_batch_step)
 
         use_space = str(cfg.use_space_char).lower()
@@ -203,6 +217,8 @@ Global:
   infer_mode: False
   use_space_char: {use_space}
   save_res_path: {save_res_path}
+  seed: {cfg.seed}
+  distributed: False
 
 Optimizer:
   name: Adam
@@ -330,35 +346,58 @@ Eval:
         """
         Locate PaddleOCR's ``tools/train.py`` and execute it as a subprocess.
 
-        Raises ``RuntimeError`` when the training script cannot be found
-        (PaddleOCR 3.x pip package is inference-only; install the plugin with
-        ``paddlex --install PaddleOCR`` to get the training scripts).
+        The subprocess needs two things on its sys.path:
+          1. The project root — for ``import tools.program``.
+          2. The ppocr source root — for ``from ppocr.modeling import …`` etc.
+
+        The ``paddleocr`` pip package (2.7.x) ships only a partial ``ppocr``
+        module (data / postprocess / utils).  The full training modules
+        (modeling, losses, optimizer, metrics) live at the project root after
+        running::
+
+            python scripts/install_ppocr_source.py
         """
         train_script = self._find_train_script()
 
         if train_script is None:
             raise RuntimeError(
                 "PaddleOCR tools/train.py not found.\n"
-                "PaddleOCR 3.x no longer ships training scripts in the pip package.\n"
-                "Fix: run  paddlex --install PaddleOCR  then retry."
+                "Fix: the local tools/train.py should be present in this repo.\n"
+                "If it is missing, re-clone the repository."
+            )
+
+        # ── Verify the full ppocr training source is available ────────────────
+        project_root = Path(__file__).parent.resolve()
+        ppocr_ok = self._check_ppocr_training_modules(project_root)
+        if not ppocr_ok:
+            raise RuntimeError(
+                "Training environment is not ready — see ERROR log above.\n\n"
+                "Most common cause: running the system Python instead of the venv.\n"
+                "    source .venv/bin/activate && python train.py ...\n\n"
+                "If PaddlePaddle is missing entirely:\n"
+                "    bash setup.sh cpu   # (or cu117 / cu118 for GPU)\n\n"
+                "If the ppocr source modules are missing:\n"
+                "    python scripts/install_ppocr_source.py"
             )
 
         cmd = [sys.executable, str(train_script), "-c", str(config_path)]
 
-        # Ensure ppocr.* and tools.* are importable in the subprocess.
-        # tools/train.py adds its parent to sys.path, but setting PYTHONPATH
-        # explicitly is more reliable on Windows with subprocess spawning.
-        ocr_repo_root = str(train_script.parent.parent)
+        # PYTHONPATH must include the project root so that:
+        #   • "import tools.program"          → project_root/tools/program.py
+        #   • "from ppocr.modeling import …"  → project_root/ppocr/modeling/
         env = os.environ.copy()
         existing = env.get("PYTHONPATH", "")
         env["PYTHONPATH"] = (
-            ocr_repo_root + os.pathsep + existing if existing else ocr_repo_root
+            str(project_root) + os.pathsep + existing
+            if existing else str(project_root)
         )
 
         logger.info("Training command: %s", " ".join(cmd))
         logger.info("use_gpu: %s", self.config.use_gpu)
 
-        result = subprocess.run(cmd, cwd=str(self.output_dir), env=env)
+        # Run from project root so relative paths in the YAML are resolved
+        # relative to the project, not some arbitrary CWD.
+        result = subprocess.run(cmd, cwd=str(project_root), env=env)
         if result.returncode != 0:
             raise RuntimeError(
                 f"PaddleOCR training failed (return code {result.returncode})."
@@ -377,6 +416,7 @@ Eval:
 
         This method searches the following locations in order:
 
+        0. Local ``tools/train.py`` bundled with this project (preferred).
         1. ``PADDLE_PDX_PADDLEOCR_PATH`` environment variable (user-set path).
         2. PaddleX-managed repo directory
            (``paddlex.repo_manager.core._GlobalContext.REPO_PARENT_DIR``).
@@ -384,6 +424,10 @@ Eval:
            editable / source installs).
         """
         candidates: list[Path] = []
+
+        # 0. Local tools/ bundled in this repository (highest priority)
+        local_script = Path(__file__).parent / "tools" / "train.py"
+        candidates.append(local_script)
 
         # 1. User-set environment variable
         env_path = os.environ.get("PADDLE_PDX_PADDLEOCR_PATH")
@@ -421,24 +465,104 @@ Eval:
         )
         return None
 
+    def _check_ppocr_training_modules(self, project_root: Path) -> bool:
+        """Return True if the full ppocr training source is importable.
+
+        The paddleocr pip package ships only inference modules (data,
+        postprocess, utils).  Training additionally requires modeling, losses,
+        optimizer, and metrics.
+
+        Run ``python scripts/install_ppocr_source.py`` to download the full
+        source from PaddleOCR release/2.7 into ``<project_root>/ppocr/``.
+        """
+        # Ensure project root is on sys.path so ppocr/ at project root is found.
+        project_root_str = str(project_root)
+        if project_root_str not in sys.path:
+            sys.path.insert(0, project_root_str)
+
+        # Check paddle framework first — all training modules need it.
+        try:
+            __import__("paddle")
+        except ImportError:
+            logger.error(
+                "PaddlePaddle is not installed in the current Python environment.\n"
+                "You are likely running the system Python instead of the project venv.\n\n"
+                "Fix (activate the venv and retry):\n"
+                "    source .venv/bin/activate\n"
+                "    python train.py ...\n\n"
+                "Or set up the environment from scratch:\n"
+                "    bash setup.sh cpu   # (or cu117 / cu118 for GPU)"
+            )
+            return False
+
+        required = [
+            "ppocr.modeling",
+            "ppocr.losses",
+            "ppocr.optimizer",
+            "ppocr.metrics",
+        ]
+        missing = []
+        for mod in required:
+            try:
+                __import__(mod)
+            except ImportError:
+                missing.append(mod)
+
+        if missing:
+            logger.error(
+                "Missing ppocr training modules: %s\n"
+                "The paddleocr pip package ships only an inference-only subset "
+                "of ppocr.\n"
+                "Fix: python scripts/install_ppocr_source.py",
+                missing,
+            )
+            return False
+        return True
+
     def _resolve_best_model(self) -> Path:
-        """Return the directory of the best or most recent saved checkpoint."""
+        """Return the base path of the best or most recent saved checkpoint.
+
+        PaddleOCR saves checkpoints as ``<name>.pdparams`` / ``<name>.pdopt``
+        files — NOT as directories.  The base path (without extension) is what
+        the export script and ``-o Global.pretrained_model=`` flag expect.
+
+        Search order:
+          1. ``models/best_accuracy.pdparams``  → return ``models/best_accuracy``
+          2. most recent ``models/iter_epoch_*.pdparams``
+          3. ``models/latest.pdparams`` (fallback)
+          4. ``models/`` directory itself (last resort, with a warning)
+        """
         models_dir = self.output_dir / "models"
 
-        best = models_dir / "best_accuracy"
-        if best.exists():
-            return best
+        # 1. Best-accuracy checkpoint (PaddleOCR standard name)
+        if (models_dir / "best_accuracy.pdparams").exists():
+            return models_dir / "best_accuracy"
 
-        # Fall back to the most recently modified epoch directory.
-        candidates = sorted(
-            models_dir.glob("iter_epoch_*"),
+        # 2. Most recent epoch checkpoint
+        epoch_files = sorted(
+            models_dir.glob("iter_epoch_*.pdparams"),
             key=lambda p: p.stat().st_mtime,
         )
-        if candidates:
-            return candidates[-1]
+        if epoch_files:
+            logger.info(
+                "best_accuracy.pdparams not found; using latest epoch: %s",
+                epoch_files[-1].name,
+            )
+            return epoch_files[-1].with_suffix("")  # strip .pdparams
+
+        # 3. latest.pdparams (saved at end of each epoch by PaddleOCR)
+        if (models_dir / "latest.pdparams").exists():
+            return models_dir / "latest"
+
+        # 4. Legacy: directory-style checkpoint (pre-2.7 format)
+        best_dir = models_dir / "best_accuracy"
+        if best_dir.is_dir():
+            return best_dir
 
         logger.warning(
-            "Could not locate a saved checkpoint in %s.", models_dir
+            "Could not locate a saved checkpoint in %s.  "
+            "Has training completed successfully?",
+            models_dir,
         )
         return models_dir
 
@@ -479,7 +603,8 @@ Eval:
                 f"Global.pretrained_model={model_dir}",
                 f"Global.save_inference_dir={export_path}",
             ]
-            result = subprocess.run(cmd, cwd=str(self.output_dir))
+            project_root = str(Path(__file__).parent.resolve())
+            result = subprocess.run(cmd, cwd=project_root)
             if result.returncode != 0:
                 logger.warning(
                     "Export script returned non-zero – copying weights directly."
@@ -495,13 +620,22 @@ Eval:
         return export_path
 
     def _find_export_script(self) -> Optional[Path]:
+        # Local tools/export_model.py bundled with this project (first choice)
+        local_script = Path(__file__).parent / "tools" / "export_model.py"
+        if local_script.exists():
+            return local_script
+
+        # PaddleOCR 2.x pip package tools directory
         try:
             import paddleocr  # type: ignore
 
             script = Path(paddleocr.__file__).parent / "tools" / "export_model.py"
-            return script if script.exists() else None
+            if script.exists():
+                return script
         except ImportError:
-            return None
+            pass
+
+        return None
 
     def _copy_weights(self, src: Path, dst: Path) -> None:
         for pattern in ("*.pdparams", "*.pdopt", "*.pdmodel", "*.pdiparams"):

@@ -215,5 +215,27 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-#image 
+#image
 *.png
+
+# PaddleOCR training source (downloaded via scripts/install_ppocr_source.py)
+# This is a vendored dependency, not project source code.
+ppocr/
+
+# Pretrained model weights
+pretrained/*/
+!pretrained/.gitkeep
+
+# Training runs and artifacts
+runs/*/models/
+runs/*/results/
+runs/*/exported/
+
+# Generated dataset crops
+finetune_data/
+
+# PaddlePaddle inference model artifacts
+*.pdparams
+*.pdopt
+*.pdmodel
+*.pdiparams
